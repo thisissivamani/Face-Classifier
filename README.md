@@ -1,4 +1,5 @@
-![Uploading Screenshot 2024-01-10 112734.png…]()
+![Screenshot 2024-01-10 112734](https://github.com/thisissivamani/mainface/assets/117293850/02040f6d-62e2-4553-aa33-1a08007bf2cb)
+
 
 In this data science and machine learning project, we classify faces. We restrict classification to only 4 people,
 
