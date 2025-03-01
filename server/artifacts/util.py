@@ -1,10 +1,10 @@
-
 import joblib
 import json
 import numpy as np
 import base64
 import cv2
-from wavelet import w2d
+import os
+from .wavelet import w2d
 
 __class_name_to_number = {}
 __class_number_to_name = {}
@@ -12,7 +12,6 @@ __class_number_to_name = {}
 __model = None
 
 def classify_image(image_base64_data, file_path=None):
-
     imgs = get_cropped_image_if_2_eyes(file_path, image_base64_data)
 
     result = []
@@ -41,31 +40,32 @@ def load_saved_artifacts():
     global __class_name_to_number
     global __class_number_to_name
 
-    with open("C:\\Users\\sivam\\Downloads\\IMAGE\server\\artifacts\\class_dictionary.json", "r") as f:
+    # Use relative paths for Vercel deployment
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    with open(os.path.join(current_dir, "class_dictionary.json"), "r") as f:
         __class_name_to_number = json.load(f)
         __class_number_to_name = {v:k for k,v in __class_name_to_number.items()}
 
     global __model
     if __model is None:
-        with open('C:\\Users\\sivam\\Downloads\\IMAGE\\server\\artifacts\\saved_model.pkl', 'rb') as f:
+        with open(os.path.join(current_dir, 'saved_model.pkl'), 'rb') as f:
             __model = joblib.load(f)
     print("loading saved artifacts...done")
 
-
 def get_cv2_image_from_base64_string(b64str):
-    '''
-    credit: https://stackoverflow.com/questions/33754935/read-a-base-64-encoded-image-from-memory-using-opencv-python-library
-    :param uri:
-    :return:
-    '''
-    encoded_data = b64str.split(',')[1]
+    try:
+        encoded_data = b64str.split(',')[1]
+    except:
+        encoded_data = b64str
     nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     return img
 
 def get_cropped_image_if_2_eyes(image_path, image_base64_data):
-    face_cascade = cv2.CascadeClassifier('C:\\Users\\sivam\\Downloads\\IMAGE\\server\\opencv\\haarcascades\\haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier('C:\\Users\\sivam\\Downloads\\IMAGE\\server\\opencv\\haarcascades\\haarcascade_eye.xml')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    face_cascade = cv2.CascadeClassifier(os.path.join(current_dir, 'opencv/haarcascades/haarcascade_frontalface_default.xml'))
+    eye_cascade = cv2.CascadeClassifier(os.path.join(current_dir, 'opencv/haarcascades/haarcascade_eye.xml'))
 
     if image_path:
         img = cv2.imread(image_path)
@@ -83,12 +83,3 @@ def get_cropped_image_if_2_eyes(image_path, image_base64_data):
             if len(eyes) >= 2:
                 cropped_faces.append(roi_color)
     return cropped_faces
-
-def get_b64_test_image_for_virat():
-    with open("C:\\Users\\sivam\\Downloads\\IMAGE\\server\\b64.txt") as f:
-        return f.read()
-
-if __name__ == '__main__':
-    load_saved_artifacts()
-
-    print(classify_image(get_b64_test_image_for_virat(), None))
