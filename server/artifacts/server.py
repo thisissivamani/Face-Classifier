@@ -1,32 +1,112 @@
-from flask import Flask, Response, request, jsonify
-from waitress import serve
-import util
-import os
+from flask import Flask, request, jsonify
+from http.server import BaseHTTPRequestHandler
 import json
+import base64
+import os
+import sys
+
+# Add the current directory to the path so we can import our modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Import after path is set
+import util
 
 app = Flask(__name__)
 
-@app.route('/api/classify_image', methods=['POST'])
-def classify_image():
-    image_data = request.form['image_data']
-    result = util.classify_image(image_data)
-    response = jsonify(result)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    return response
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        # Get content length
+        content_length = int(self.headers['Content-Length'])
+        # Get the data
+        post_data = self.rfile.read(content_length)
+        data = json.loads(post_data.decode('utf-8'))
+        
+        # Process the image
+        try:
+            image_data = data.get('image_data', '')
+            if not image_data:
+                response = {'error': 'No image data provided'}
+                self.send_error(400, 'No image data provided')
+                return
+                
+            results = util.classify_image(image_data)
+            
+            # Send response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(results).encode())
+        except Exception as e:
+            # Log the error
+            print(f"Error: {str(e)}")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
 
-@app.route('/', methods=['GET'])
-def home():
-    return "Image Classification API is running! Send POST requests to /api/classify_image"
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "running",
+            "message": "Image Classification API is running! Send POST requests with image_data."
+        }).encode())
 
-# For local testing
-if __name__ == "__main__":
-    print("Starting Python Flask Server For Sports Celebrity Image Classification")
+# Initialize model at module level for cold starts
+print("Initializing model...")
+try:
     util.load_saved_artifacts()
-    app.run(port=5000)
+    print("Model loaded successfully")
+except Exception as e:
+    print(f"Error loading model: {str(e)}")
 
-# For Vercel
-util.load_saved_artifacts()
-
-# Add handler for Vercel
-def handler(request, **kwargs):
-    return app(request.environ, start_response)
+# Handler for Vercel
+def handler(request):
+    if request.method == 'POST':
+        try:
+            # Get the JSON body
+            body = json.loads(request.body)
+            image_data = body.get('image_data', '')
+            
+            if not image_data:
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({"error": "No image data provided"})
+                }
+                
+            results = util.classify_image(image_data)
+            
+            return {
+                "statusCode": 200,
+                "body": json.dumps(results),
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            }
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps({"error": str(e)}),
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            }
+    else:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "status": "running",
+                "message": "Image Classification API is running! Send POST requests with image_data."
+            }),
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            }
+        }
